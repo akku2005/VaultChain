@@ -1,0 +1,9 @@
+{
+  "watch": ["server.js", "src/"],
+  "ext": "js,json,mjs",
+  "ignore": ["src/**/*.spec.js", "tests/", "docs/"],
+  "exec": "npm run lint && node --experimental-modules server.js",
+  "verbose": true,
+  "restartable": "rs",
+  "delay": "2500"
+}
