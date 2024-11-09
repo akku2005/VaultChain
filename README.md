@@ -1,4 +1,4 @@
-# DeFi Management Platform Backend
+# VaultChain Management Platform Backend
 
 ## Project Overview
 
