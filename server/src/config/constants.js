@@ -1,1 +1,55 @@
-// Global constants and enums
+// src/config/constants.js
+
+// User-related Constants
+const USER_ROLES = {
+  ADMIN: 'ADMIN',
+  USER: 'USER',
+  PREMIUM_USER: 'PREMIUM_USER',
+};
+
+// Blockchain Network Constants
+const BLOCKCHAIN_NETWORKS = {
+  ETHEREUM: 'ETHEREUM',
+  POLYGON: 'POLYGON',
+  BINANCE_SMART_CHAIN: 'BINANCE_SMART_CHAIN',
+};
+
+// Transaction Types
+const TRANSACTION_TYPES = {
+  DEPOSIT: 'DEPOSIT',
+  WITHDRAWAL: 'WITHDRAWAL',
+  SWAP: 'SWAP',
+  TRANSFER: 'TRANSFER',
+};
+
+// Portfolio Types
+const PORTFOLIO_TYPES = {
+  CRYPTO: 'CRYPTO',
+  DEFI: 'DEFI',
+  HYBRID: 'HYBRID',
+};
+
+// Error Codes
+const ERROR_CODES = {
+  VALIDATION_ERROR: 'VALIDATION_ERROR',
+  NOT_FOUND: 'NOT_FOUND',
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  FORBIDDEN: 'FORBIDDEN',
+  CONFLICT: 'CONFLICT',
+  INTERNAL_SERVER_ERROR: 'INTERNAL_SERVER_ERROR',
+};
+
+// Rate Limiting Constants
+const RATE_LIMIT_CONFIGS = {
+  MAX_REQUESTS: 100,
+  WINDOW_MS: 15 * 60 * 1000, // 15 minutes
+};
+
+module.exports = {
+  USER_ROLES,
+  BLOCKCHAIN_NETWORKS,
+  TRANSACTION_TYPES,
+  PORTFOLIO_TYPES,
+  ERROR_CODES,
+  RATE_LIMIT_CONFIGS,
+};

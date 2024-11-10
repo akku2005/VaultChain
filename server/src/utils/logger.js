@@ -1,4 +1,3 @@
-// Enhanced logger.js
 'use strict';
 
 const winston = require('winston');
@@ -6,11 +5,9 @@ const path = require('path');
 const fs = require('fs');
 const chalk = require('chalk');
 
-// Ensure log directory exists
 const logDir = path.join(process.cwd(), 'logs');
 fs.mkdirSync(logDir, { recursive: true });
 
-// Custom log levels with colors
 const logLevels = {
   levels: {
     error: 0,
@@ -26,7 +23,6 @@ const logLevels = {
   },
 };
 
-// Create logger
 const createLogger = () => {
   const logger = winston.createLogger({
     levels: logLevels.levels,
