@@ -3,5 +3,6 @@
   "watch": ["server.js", "src/", ".eslintrc.js"],
   "ext": "js,json",
   "ignore": ["tests/", "docs/", "*.test.js"],
-  "exec": "npm run lint && node server.js"
+  "exec": "npm run lint && node server.js",
+  "delay": "1000"
 }
