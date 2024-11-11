@@ -1,5 +1,5 @@
 {
-  "name": "defi-management-platform-server",
+  "name": "vault-chain",
   "version": "1.0.0",
   "description": "Advanced Decentralized Finance Management Platform Backend",
   "main": "server.js",
@@ -48,9 +48,9 @@
   "type": "commonjs",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yourusername/defi-management-platform"
+    "url": "https://github.com/akku2005/VaultChain.git"
   },
-  "homepage": "https://github.com/yourusername/defi-management-platform#readme",
+  "homepage": "https://github.com/akku2005/VaultChain#readme",
   "dependencies": {
     "axios": "^1.6.8",
     "bcryptjs": "^2.4.3",
@@ -66,6 +66,7 @@
     "helmet": "^7.2.0",
     "joi": "^17.12.3",
     "jsonwebtoken": "^9.0.2",
+    "knex": "^3.1.0",
     "mongoose": "^8.8.1",
     "morgan": "^1.10.0",
     "node-cron": "^3.0.3",
