@@ -1,65 +1,69 @@
 'use strict';
 const mongoose = require('mongoose');
-const { Pool } = require('pg');
+const mysql = require('mysql2/promise');
 const logger = require('../utils/logger');
 
-class DatabaseConfig {
+class DatabaseManager {
   constructor() {
+    this.mysqlConnection = null;
     this.mongoConnection = null;
-    this.postgresPool = null;
   }
 
-  async connectMongoDB() {
+  async connectToMongoDB() {
     try {
-      const mongoUri = process.env.MONGODB_URI;
-      const dbName = process.env.MONGODB_DB_NAME;
-
-      this.mongoConnection = await mongoose.connect(mongoUri, {
-        dbName: dbName,
+      this.mongoConnection = await mongoose.connect(process.env.MONGODB_URI, {
+        dbName: process.env.MONGODB_DB_NAME,
         useNewUrlParser: true,
         useUnifiedTopology: true,
       });
 
       logger.custom.database('MongoDB Connected Successfully', {
-        uri: mongoUri,
-        database: dbName,
+        database: process.env.MONGODB_DB_NAME,
+      });
+
+      // Optional: Setup Mongoose connection events
+      mongoose.connection.on('error', (err) => {
+        logger.error('MongoDB Connection Error', { error: err });
+      });
+
+      mongoose.connection.on('disconnected', () => {
+        logger.warn('MongoDB Disconnected');
       });
 
       return this.mongoConnection;
     } catch (error) {
-      logger.custom.database('MongoDB Connection Failed', {
+      logger.error('MongoDB Connection Failed', {
         error: error.message,
+        uri: this.maskConnectionString(process.env.MONGODB_URI),
       });
       throw error;
     }
   }
 
-  async connectPostgreSQL() {
+  async connectToMySQL() {
     try {
-      this.postgresPool = new Pool({
+      this.mysqlConnection = await mysql.createPool({
         host: process.env.DB_HOST,
         port: process.env.DB_PORT,
         user: process.env.DB_USER,
         password: process.env.DB_PASSWORD,
         database: process.env.DB_NAME,
-        max: 20, // Maximum number of clients in the pool
-        idleTimeoutMillis: 30000, // How long a client is allowed to remain idle
-        connectionTimeoutMillis: 2000, // How long to wait when connecting
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0,
+        connectTimeout: 10000, // 10 seconds
       });
 
-      // Test the connection
-      const client = await this.postgresPool.connect();
-      client.release();
-
-      logger.custom.database('PostgreSQL Connection Pool Created Successfully', {
-        host: process.env.DB_HOST,
+      logger.custom.database('MySQL Connected Successfully', {
         database: process.env.DB_NAME,
+        host: process.env.DB_HOST,
       });
 
-      return this.postgresPool;
+      return this.mysqlConnection;
     } catch (error) {
-      logger.custom.database('PostgreSQL Connection Failed', {
+      logger.error('MySQL Connection Failed', {
         error: error.message,
+        host: process.env.DB_HOST,
       });
       throw error;
     }
@@ -67,50 +71,74 @@ class DatabaseConfig {
 
   async initializeDatabases() {
     try {
-      await Promise.all([this.connectMongoDB(), this.connectPostgreSQL()]);
+      // Parallel database connections
+      await Promise.all([this.connectToMongoDB(), this.connectToMySQL()]);
     } catch (error) {
-      logger.error('Database Initialization Failed', {
+      logger.error('Database Initialization Failed', { error: error.message });
+      process.exit(1);
+    }
+  }
+
+  // MySQL Query Execution Utility
+  async executeQuery(query, params = []) {
+    if (!this.mysqlConnection) {
+      throw new Error('MySQL Connection Not Established');
+    }
+
+    try {
+      const [results] = await this.mysqlConnection.execute(query, params);
+      return results;
+    } catch (error) {
+      logger.error('MySQL Query Execution Failed', {
+        query,
         error: error.message,
       });
       throw error;
     }
   }
 
-  async closeDatabaseConnections() {
+  // Mongoose Model Registration Utility
+  registerModel(modelName, schema) {
+    return mongoose.model(modelName, schema);
+  }
+
+  // Mask sensitive parts of connection string
+  maskConnectionString(uri) {
     try {
-      // Close MongoDB connection
-      if (this.mongoConnection) {
-        await mongoose.connection.close();
-        logger.custom.database('MongoDB Connection Closed');
-      }
-
-      // Close PostgreSQL connection pool
-      if (this.postgresPool) {
-        await this.postgresPool.end();
-        logger.custom.database('PostgreSQL Connection Pool Closed');
-      }
-    } catch (error) {
-      logger.error('Database Closure Failed', {
-        error: error.message,
-      });
+      const urlParts = new URL(uri);
+      urlParts.password = '****';
+      return urlParts.toString();
+    } catch {
+      return uri.replace(/:(.*?)@/g, ':****@');
     }
   }
 
-  // Utility method to get PostgreSQL client
-  async getPostgresClient() {
-    if (!this.postgresPool) {
-      await this.connectPostgreSQL();
+  // Graceful Shutdown
+  async disconnect() {
+    if (this.mysqlConnection) {
+      await this.mysqlConnection.end();
+      logger.info('MySQL Connection Closed');
     }
-    return this.postgresPool.connect();
-  }
 
-  // Utility method to get Mongoose connection
-  getMongooseConnection() {
-    if (!this.mongoConnection) {
-      throw new Error('MongoDB connection not established');
+    if (this.mongoConnection) {
+      await mongoose.connection.close();
+      logger.info('MongoDB Connection Closed');
     }
-    return this.mongoConnection;
   }
 }
 
-module.exports = new DatabaseConfig();
+// Singleton Instance
+const databaseManager = new DatabaseManager();
+
+// Graceful Shutdown Handlers
+process.on('SIGINT', async () => {
+  await databaseManager.disconnect();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  await databaseManager.disconnect();
+  process.exit(0);
+});
+
+module.exports = databaseManager;
