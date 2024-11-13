@@ -75,6 +75,7 @@
     "pg": "^8.13.1",
     "redis": "^4.6.13",
     "sequelize": "^6.37.5",
+    "sequelize-cli": "^6.6.2",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^9.0.1",
     "web3": "^4.3.0",

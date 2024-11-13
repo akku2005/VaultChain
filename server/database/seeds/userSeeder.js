@@ -23,3 +23,34 @@
 // };
 
 // module.exports = seedUsers;
+
+'use strict';
+
+module.exports = {
+  up: async (queryInterface, _Sequelize) => {
+    await queryInterface.bulkInsert(
+      'Users',
+      [
+        {
+          username: 'john_doe',
+          email: 'john.doe@example.com',
+          password: 'hashed_password', // Use hashed passwords in production
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+        {
+          username: 'jane_doe',
+          email: 'jane.doe@example.com',
+          password: 'hashed_password', // Use hashed passwords in production
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        },
+      ],
+      {},
+    );
+  },
+
+  down: async (queryInterface, _Sequelize) => {
+    await queryInterface.bulkDelete('Users', null, {});
+  },
+};

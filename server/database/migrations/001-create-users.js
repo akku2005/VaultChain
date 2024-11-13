@@ -18,3 +18,46 @@
 // };
 
 // module.exports = { up, down };
+'use strict';
+
+module.exports = {
+  up: async (queryInterface, _Sequelize) => {
+    // Prefix Sequelize with an underscore
+    await queryInterface.createTable('Users', {
+      id: {
+        type: _Sequelize.INTEGER,
+        allowNull: false,
+        autoIncrement: true,
+        primaryKey: true,
+      },
+      username: {
+        type: _Sequelize.STRING,
+        allowNull: false,
+        unique: true,
+      },
+      email: {
+        type: _Sequelize.STRING,
+        allowNull: false,
+        unique: true,
+      },
+      password: {
+        type: _Sequelize.STRING,
+        allowNull: false,
+      },
+      createdAt: {
+        type: _Sequelize.DATE,
+        allowNull: false,
+        defaultValue: _Sequelize.fn('now'),
+      },
+      updatedAt: {
+        type: _Sequelize.DATE,
+        allowNull: false,
+        defaultValue: _Sequelize.fn('now'),
+      },
+    });
+  },
+
+  down: async (queryInterface, _Sequelize) => {
+    await queryInterface.dropTable('Users');
+  },
+};
