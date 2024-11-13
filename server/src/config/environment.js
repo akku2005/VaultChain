@@ -1,67 +1,40 @@
+// src/config/environment.js
 'use strict';
 const dotenv = require('dotenv');
-const path = require('path');
 
-// Determine the current environment
-const NODE_ENV = process.env.NODE_ENV || 'development';
+// Load environment variables based on NODE_ENV
+dotenv.config({
+  path: `./config/.env.${process.env.NODE_ENV || 'development'}`,
+});
 
-// Load environment-specific .env file
-const envFile = `.env.${NODE_ENV}`;
-dotenv.config({ path: path.resolve(process.cwd(), 'config', envFile) });
-
-const environmentConfig = {
-  // Application Configuration
-  APP_NAME: process.env.APP_NAME || 'DeFi Management Platform',
-  NODE_ENV,
+module.exports = {
+  // App Config
+  APP_NAME: process.env.APP_NAME,
+  NODE_ENV: process.env.NODE_ENV,
   PORT: process.env.PORT || 3000,
 
-  // Security Configuration
+  // MySQL Config
+  MYSQL_HOST: process.env.MYSQL_HOST,
+  MYSQL_PORT: process.env.MYSQL_PORT,
+  MYSQL_USER: process.env.MYSQL_USER,
+  MYSQL_PASSWORD: process.env.MYSQL_PASSWORD,
+  MYSQL_DATABASE: process.env.MYSQL_DATABASE,
+  MYSQL_CONNECTION_LIMIT: process.env.MYSQL_CONNECTION_LIMIT,
+  MYSQL_CONNECT_TIMEOUT: process.env.MYSQL_CONNECT_TIMEOUT,
+
+  // MongoDB Config
+  MONGODB_URI: process.env.MONGODB_URI,
+  MONGODB_DB_NAME: process.env.MONGODB_DB_NAME,
+
+  // JWT Config
   JWT_SECRET: process.env.JWT_SECRET,
-  JWT_EXPIRATION: process.env.JWT_EXPIRATION || '1d',
+  JWT_EXPIRATION: process.env.JWT_EXPIRATION,
 
-  // Blockchain Configuration
-  BLOCKCHAIN_PROVIDERS: {
-    ETHEREUM: {
-      NETWORK: process.env.ETHEREUM_NETWORK || 'mainnet',
-      PROVIDER_URL: process.env.ETHEREUM_PROVIDER_URL,
-    },
-    POLYGON: {
-      NETWORK: process.env.POLYGON_NETWORK || 'mainnet',
-      PROVIDER_URL: process.env.POLYGON_PROVIDER_URL,
-    },
-  },
-
-  // External Service Configuration
-  EXTERNAL_SERVICES: {
-    COINBASE: {
-      API_KEY: process.env.COINBASE_API_KEY,
-      API_SECRET: process.env.COINBASE_API_SECRET,
-    },
-    BINANCE: {
-      API_KEY: process.env.BINANCE_API_KEY,
-      API_SECRET: process.env.BINANCE_API_SECRET,
-    },
-  },
-
-  // Logging Configuration
-  LOGGING: {
-    LEVEL: process.env.LOG_LEVEL || 'info',
-    MAX_FILES: process.env.LOG_MAX_FILES || '14d',
-    MAX_SIZE: process.env.LOG_MAX_SIZE || '20m',
-  },
-
-  // Cache Configuration
-  REDIS: {
-    HOST: process.env.REDIS_HOST || 'localhost',
-    PORT: process.env.REDIS_PORT || 6379,
-    PASSWORD: process.env.REDIS_PASSWORD,
-  },
+  // Redis Config
+  REDIS_HOST: process.env.REDIS_HOST,
+  REDIS_PORT: process.env.REDIS_PORT,
 
   // Feature Flags
-  FEATURES: {
-    ENABLE_NOTIFICATIONS: process.env.ENABLE_NOTIFICATIONS === 'true',
-    ENABLE_PORTFOLIO_TRACKING: process.env.ENABLE_PORTFOLIO_TRACKING === 'true',
-  },
+  ENABLE_NOTIFICATIONS: process.env.ENABLE_NOTIFICATIONS === 'true',
+  ENABLE_PORTFOLIO_TRACKING: process.env.ENABLE_PORTFOLIO_TRACKING === 'true',
 };
-
-module.exports = environmentConfig;
