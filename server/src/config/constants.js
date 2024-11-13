@@ -1,6 +1,6 @@
 // src/config/constants.js
 
-// User-related Constants
+'use strict';
 const USER_ROLES = {
   ADMIN: 'ADMIN',
   USER: 'USER',

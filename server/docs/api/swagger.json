@@ -1,0 +1,83 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "DeFi Management Platform API",
+    "version": "1.0.0",
+    "description": "API documentation for the DeFi Management Platform",
+    "contact": {
+      "name": "API Support",
+      "email": "support@defiplatform.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000/api/v1",
+      "description": "Local development server"
+    },
+    {
+      "url": "https://api.defiplatform.com/v1",
+      "description": "Production server"
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health Check",
+        "description": "Check the status of the API",
+        "responses": {
+          "200": {
+            "description": "API is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": {
+                      "type": "string",
+                      "example": "healthy"
+                    },
+                    "timestamp": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "environment": {
+                      "type": "string",
+                      "example": "development"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "message": {
+            "type": "string"
+          },
+          "errorCode": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ]
+}
