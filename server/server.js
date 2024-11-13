@@ -10,7 +10,7 @@ require('dotenv').config({
 
 const express = require('express');
 const mongoose = require('mongoose');
-const mysqlPool = require('./src/config/mysql');
+const mysqlPool = require('./src/database/mysql');
 const logger = require('./src/utils/logger');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -70,8 +70,6 @@ class Server {
       const { MONGODB_URI, MONGODB_DB_NAME } = process.env;
       logger.info('Connecting to MongoDB...');
       await mongoose.connect(MONGODB_URI, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
         dbName: MONGODB_DB_NAME,
       });
       logger.info(`MongoDB connected to database: ${MONGODB_DB_NAME}`);

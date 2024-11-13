@@ -1,9 +1,7 @@
-// database/migrations/001-create-users.js
 'use strict';
 
-/** @type {import('sequelize-cli').Migration} */
 module.exports = {
-  async up(queryInterface, _Sequelize) {
+  up: async (queryInterface, _Sequelize) => {
     await queryInterface.createTable('Users', {
       id: {
         type: _Sequelize.INTEGER,
@@ -36,7 +34,7 @@ module.exports = {
     });
   },
 
-  async down(queryInterface, _Sequelize) {
+  down: async (queryInterface, _Sequelize) => {
     await queryInterface.dropTable('Users');
   },
 };

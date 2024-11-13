@@ -1,6 +1,11 @@
+// src/config/config.js
 'use strict';
-const path = require('path'); // Import the path module
-require('dotenv').config({ path: path.resolve(__dirname, '../../config/.env.development') }); // Adjust path as necessary
+require('dotenv').config({
+  path:
+    process.env.NODE_ENV === 'production'
+      ? './config/.env.production'
+      : './config/.env.development',
+});
 
 module.exports = {
   development: {

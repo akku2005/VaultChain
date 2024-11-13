@@ -34,7 +34,7 @@
 const fs = require('fs');
 const path = require('path');
 const Sequelize = require('sequelize');
-const config = require('../src/config/database'); // Import your database config
+const config = require('../../src/config/database'); // Import your database config
 const sequelize = new Sequelize(config.database, config.username, config.password, config);
 
 const migrationsPath = path.join(__dirname, 'migrations');
