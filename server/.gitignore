@@ -113,6 +113,10 @@ dist
 *.swp
 *.swo
 
+# .env 
+.env.development
+.env.production
+
 # OS generated files
 .DS_Store
 .DS_Store?
