@@ -74,6 +74,7 @@
     "node-cron": "^3.0.3",
     "pg": "^8.13.1",
     "redis": "^4.6.13",
+    "sequelize": "^6.37.5",
     "swagger-ui-express": "^5.0.1",
     "uuid": "^9.0.1",
     "web3": "^4.3.0",

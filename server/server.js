@@ -84,7 +84,14 @@ class Server {
   async connectMySQL() {
     try {
       logger.info('Connecting to MySQL...');
-      await mysqlPool.getConnection();
+      mysqlPool
+        .sync({ force: false })
+        .then(() => {
+          logger.info('Table is Synced');
+        })
+        .catch((error) => {
+          logger.info('Table is Not synced', error);
+        });
       logger.info('MySQL connection pool initialized');
     } catch (error) {
       logger.error('MySQL connection failed', { error: error.message });
