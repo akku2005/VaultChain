@@ -3,7 +3,7 @@
 
 // const mysql = require('mysql2');
 const Sequlize = require('sequelize');
-const logger = require('../utils/logger');
+// const logger = require('../utils/logger');
 
 // const pool = mysql.createPool({
 //   host: process.env.MYSQL_HOST,
@@ -40,12 +40,5 @@ const sequlize = new Sequlize(
     },
   },
 );
-sequlize
-  .authenticate()
-  .then(() => {
-    logger.info('✅ MySQL Connected Successfully');
-  })
-  .catch((err) => {
-    logger.error('❌ MySQL Connection Error:', { error: err });
-  });
+
 module.exports = sequlize; // Enables async/await for queries
