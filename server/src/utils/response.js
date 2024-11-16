@@ -14,7 +14,7 @@ const prepareResponse = (status_code, msg, data, error) => {
 };
 
 const prepareBody = (req, res, next) => {
-  if (req.get('Referrer') !== 'http://localhost:4000/api-docs/') {
+  if (req.get('Referrer') !== 'http://localhost:3000/api-docs/') {
     req.body = JSON.parse(
       cryptoJS.AES.decrypt(req.body.cypher, process.env.CYS).toString(cryptoJS.enc.Utf8),
     );
