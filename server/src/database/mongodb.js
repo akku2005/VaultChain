@@ -1,4 +1,3 @@
-// src/config/mongoConnection.js
 'use strict';
 const mongoose = require('mongoose');
 const { MONGODB_URI, MONGODB_DB_NAME } = require('./environment');

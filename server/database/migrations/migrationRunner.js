@@ -1,63 +1,109 @@
-// 'use strict';
-// const { Client } = require('pg'); // Change this based on your DB
-// const fs = require('fs');
-// const path = require('path');
-
-// const runMigrations = async () => {
-//   const client = new Client({
-//     connectionString: process.env.DATABASE_URL, // Your database connection string
-//   });
-
-//   try {
-//     await client.connect();
-//     const migrationFiles = fs
-//       .readdirSync(__dirname)
-//       .filter((file) => file.endsWith('.js') && file !== 'migrationRunner.js');
-
-//     for (const file of migrationFiles) {
-//       const migration = require(path.join(__dirname, file));
-//       console.log(`Running migration: ${file}`);
-//       await migration.up(client);
-//     }
-
-//     console.log('All migrations completed successfully.');
-//   } catch (error) {
-//     console.error('Error running migrations:', error);
-//   } finally {
-//     await client.end();
-//   }
-// };
-
-// runMigrations();
 'use strict';
-
-const fs = require('fs');
+const mongoose = require('mongoose');
+const fs = require('fs').promises;
 const path = require('path');
-const Sequelize = require('sequelize');
-const config = require('../../src/config/database'); // Import your database config
-const sequelize = new Sequelize(config.database, config.username, config.password, config);
 
-const migrationsPath = path.join(__dirname, 'migrations');
-const migrationFiles = fs.readdirSync(migrationsPath).filter((file) => file.endsWith('.js'));
+class MongoMigrationManager {
+  constructor(options = {}) {
+    this.migrationsPath = options.migrationsPath || path.join(__dirname);
+    this.migrationCollection = options.migrationCollection || 'migrations';
+  }
 
-const runMigrations = async () => {
-  for (const file of migrationFiles) {
-    const migration = require(path.join(migrationsPath, file));
-    try {
-      await migration.up(sequelize.getQueryInterface(), Sequelize);
-      console.log(`Migration ${file} applied successfully.`);
-    } catch (error) {
-      console.error(`Failed to apply migration ${file}: ${error.message}`);
+  async connect() {
+    const { MONGODB_URI, MONGODB_DB_NAME } = process.env;
+
+    if (mongoose.connection.readyState === 0) {
+      await mongoose.connect(MONGODB_URI, {
+        dbName: MONGODB_DB_NAME,
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+      });
+    }
+    return mongoose.connection.db;
+  }
+
+  async runMigrations() {
+    const db = await this.connect();
+
+    // Ensure migrations collection exists
+    const migrationCollection = db.collection(this.migrationCollection);
+
+    // Get list of migration files
+    const migrationFiles = await this.getMigrationFiles();
+
+    // Track applied migrations
+    for (const migrationFile of migrationFiles) {
+      const migrationName = path.basename(migrationFile);
+
+      // Check if migration has already been applied
+      const existingMigration = await migrationCollection.findOne({ name: migrationName });
+
+      if (!existingMigration) {
+        try {
+          // Import and run migration
+          const migration = require(migrationFile);
+
+          if (typeof migration.up === 'function') {
+            await migration.up(db, mongoose);
+
+            // Record successful migration
+            await migrationCollection.insertOne({
+              name: migrationName,
+              appliedAt: new Date(),
+            });
+
+            console.log(`Migration ${migrationName} applied successfully`);
+          }
+        } catch (error) {
+          console.error(`Migration ${migrationName} failed:`, error);
+          throw error;
+        }
+      }
     }
   }
-};
 
-runMigrations()
-  .then(() => {
-    console.log('All migrations completed.');
-    sequelize.close();
-  })
-  .catch((err) => {
-    console.error('Migration failed:', err);
-    sequelize.close();
-  });
+  async getMigrationFiles() {
+    const files = await fs.readdir(this.migrationsPath);
+    return files
+      .filter(
+        (file) => file.endsWith('.js') && file !== 'migrationRunner.js' && !file.includes('seed'),
+      )
+      .sort()
+      .map((file) => path.join(this.migrationsPath, file));
+  }
+
+  async rollbackLastMigration() {
+    const db = await this.connect();
+    const migrationCollection = db.collection(this.migrationCollection);
+
+    // Find the last applied migration
+    const lastMigration = await migrationCollection
+      .find()
+      .sort({ appliedAt: -1 })
+      .limit(1)
+      .toArray();
+
+    if (lastMigration.length > 0) {
+      const migrationName = lastMigration[0].name;
+      const migrationPath = path.join(this.migrationsPath, migrationName);
+
+      try {
+        const migration = require(migrationPath);
+
+        if (typeof migration.down === 'function') {
+          await migration.down(db, mongoose);
+
+          // Remove migration record
+          await migrationCollection.deleteOne({ name: migrationName });
+
+          console.log(`Rollback of ${migrationName} successful`);
+        }
+      } catch (error) {
+        console.error(`Rollback of ${migrationName} failed:`, error);
+        throw error;
+      }
+    }
+  }
+}
+
+module.exports = MongoMigrationManager;

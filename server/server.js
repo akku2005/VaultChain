@@ -14,6 +14,7 @@ const mysqlPool = require('./src/database/mysql');
 const logger = require('./src/utils/logger');
 const cors = require('cors');
 const helmet = require('helmet');
+const { AppError, ErrorHandler, asyncErrorHandler } = require('./src/utils/errorHandler');
 
 class Server {
   constructor() {
@@ -29,6 +30,7 @@ class Server {
       await this.connectDatabases();
       this.configureMiddlewares();
       this.configureRoutes();
+      this.configureErrorHandling();
       this.startServer();
     } catch (error) {
       this.handleInitializationError(error);
@@ -110,23 +112,37 @@ class Server {
   }
 
   configureRoutes() {
-    this.app.get('/', (req, res) => {
-      res.json({ status: 'Server is running', timestamp: new Date().toISOString() });
-      logger.info('Health check route accessed');
-    });
+    this.app.get(
+      '/',
+      asyncErrorHandler((req, res) => {
+        res.json({ status: 'Server is running', timestamp: new Date().toISOString() });
+        logger.info('Health check route accessed');
+      }),
+    );
 
-    this.app.get('/mysql-test', async (req, res) => {
-      try {
-        const [rows] = await mysqlPool.query('SELECT 1 + 1 AS solution');
-        res.json({ solution: rows[0].solution });
-        logger.info('MySQL test query executed successfully');
-      } catch (error) {
-        logger.error('MySQL query error', { error: error.message });
-        res.status(500).json({ error: 'MySQL query failed' });
-      }
-    });
+    this.app.get(
+      '/mysql-test',
+      asyncErrorHandler(async (req, res) => {
+        try {
+          const [rows] = await mysqlPool.query('SELECT 1 + 1 AS solution');
+          res.json({ solution: rows[0].solution });
+          logger.info('MySQL test query executed successfully');
+        } catch (error) {
+          logger.error('MySQL query error', { error: error.message });
+          throw new AppError('MySQL query failed', 500);
+        }
+      }),
+    );
 
     logger.info('Routes configured');
+  }
+
+  configureErrorHandling() {
+    // Handle not found routes
+    this.app.use(ErrorHandler.notFoundHandler);
+
+    // Global error handling middleware
+    this.app.use(ErrorHandler.globalErrorMiddleware);
   }
 
   startServer() {

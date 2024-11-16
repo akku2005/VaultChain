@@ -28,7 +28,10 @@
     "docker:run": "docker run -p 3000:3000 defi-backend",
     "docker:dev": "docker-compose up --build",
     "security:audit": "npm audit",
-    "security:fix": "npm audit fix"
+    "security:fix": "npm audit fix",
+    "migrate": "node -e \"require('./database/migrations/migrationRunner').runMigrations()\"",
+    "migrate:rollback": "node -e \"require('./database/migrations/migrationRunner').rollbackLastMigration()\"",
+    "migrate:create": "node scripts/create-migration.js"
   },
   "keywords": [
     "defi",
