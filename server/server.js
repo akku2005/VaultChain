@@ -10,7 +10,7 @@ require('dotenv').config({
 
 const express = require('express');
 const mongoose = require('mongoose');
-const mysqlPool = require('./src/config/mysql');
+const sequilize = require('./src/config/mysql');
 const logger = require('./src/utils/logger');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -84,13 +84,23 @@ class Server {
   async connectMySQL() {
     try {
       logger.info('Connecting to MySQL...');
-      mysqlPool
-        .sync({ force: false })
+      sequilize
+        .authenticate()
         .then(() => {
-          logger.info('Table is Synced');
+          logger.info('Database Connected Successfully');
+          sequilize
+            .sync({ force: false, alter: true }) //its doing the table sync and
+            .then(() => {
+              logger.info('Database Synced Successfully');
+            })
+            .catch((syncErr) => {
+              logger.error('Error Syncing Database: ' + syncErr.message);
+              process.exit(1);
+            });
         })
-        .catch((error) => {
-          logger.info('Table is Not synced', error);
+        .catch((err) => {
+          logger.error('Error Connecting to Database', err);
+          process.exit(1);
         });
       logger.info('MySQL connection pool initialized');
     } catch (error) {
@@ -112,6 +122,7 @@ class Server {
   }
 
   configureRoutes() {
+    this.app.use('/api', require('./src/routes/index'));
     this.app.get('/', (req, res) => {
       res.json({ status: 'Server is running', timestamp: new Date().toISOString() });
       logger.info('Health check route accessed');
@@ -119,7 +130,7 @@ class Server {
 
     this.app.get('/mysql-test', async (req, res) => {
       try {
-        const [rows] = await mysqlPool.query('SELECT 1 + 1 AS solution');
+        const [rows] = await sequilize.query('SELECT 1 + 1 AS solution');
         res.json({ solution: rows[0].solution });
         logger.info('MySQL test query executed successfully');
       } catch (error) {
