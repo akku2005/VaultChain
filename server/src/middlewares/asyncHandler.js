@@ -1,22 +1,38 @@
 'use strict';
-const httpRes = require('../utils/http');
-const { prepareResponse } = require('../utils/response');
-const { SERVER_ERROR_MESSAGE } = require('../utils/messages');
+const { errorResponse } = require('../utils/response');
 
-const asyncHandler = (tableName, cb) => async (req, res, next) => {
-  try {
-    req.tableName = tableName;
-    if (tableName === '') {
-      req.tableName = req.params.tableName;
-      delete req.params.tableName;
+const asyncHandler = (entityName, handler) => {
+  return async (req, res, next) => {
+    try {
+      await handler(req, res, next);
+    } catch (error) {
+      console.error(`${entityName} Error:`, error);
+
+      // Differentiate error responses
+      if (error.name === 'ValidationError') {
+        return res.status(400).json(
+          errorResponse(
+            'Validation Error',
+            error.details.map((detail) => detail.message),
+          ),
+        );
+      }
+
+      if (error.name === 'UniqueConstraintError') {
+        return res.status(409).json(
+          errorResponse(
+            'Duplicate Entry',
+            error.errors.map((err) => err.message),
+          ),
+        );
+      }
+
+      // Generic error response
+      res
+        .status(error.status || 500)
+        .json(errorResponse(error.message || 'Internal Server Error', error));
     }
-    await cb(req, res, next);
-  } catch (error) {
-    return res
-      .status(httpRes.SERVER_ERROR)
-      .json(prepareResponse('SERVER_ERROR', SERVER_ERROR_MESSAGE, null, error));
-  }
-  return true;
+  };
 };
 
 module.exports = { asyncHandler };

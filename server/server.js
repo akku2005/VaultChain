@@ -10,7 +10,7 @@ require('dotenv').config({
 
 const express = require('express');
 const mongoose = require('mongoose');
-const sequilize = require('./src/config/mysql');
+const sequilize = require('./src/database/mysql');
 const logger = require('./src/utils/logger');
 const cors = require('cors');
 const helmet = require('helmet');

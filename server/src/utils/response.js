@@ -1,28 +1,38 @@
 'use strict';
-const httpRES = require('./http');
-require('dotenv').config();
-const cryptoJS = require('crypto-js');
-
-const prepareResponse = (status_code, msg, data, error) => {
-  console.log(error);
-  return {
-    status_code: httpRES[status_code],
-    msg: msg,
-    data: cryptoJS.createSign.encrypt(JSON.stringify(data), process.env.CYS).toString(),
-    error: error,
-  };
-};
-
 const prepareBody = (req, res, next) => {
-  if (req.get('Referrer') !== 'http://localhost:3000/api-docs/') {
-    req.body = JSON.parse(
-      cryptoJS.AES.decrypt(req.body.cypher, process.env.CYS).toString(cryptoJS.enc.Utf8),
-    );
-  }
+  req.body = Object.fromEntries(
+    Object.entries(req.body).map(([key, value]) => [
+      key,
+      typeof value === 'string' ? value.trim() : value,
+    ]),
+  );
   next();
 };
 
+const successResponse = (message, data = null, meta = {}) => ({
+  success: true,
+  message,
+  data,
+  meta,
+});
+
+const errorResponse = (message, errors = []) => ({
+  success: false,
+  message,
+  errors,
+});
+
+function prepareResponse(data, message = 'Success') {
+  return {
+    status: 'success',
+    message: message,
+    data: data,
+  };
+}
+
 module.exports = {
-  prepareResponse,
   prepareBody,
+  successResponse,
+  errorResponse,
+  prepareResponse,
 };
