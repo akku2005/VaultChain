@@ -10,11 +10,10 @@ require('dotenv').config({
 
 const express = require('express');
 const mongoose = require('mongoose');
-const mysqlPool = require('./src/database/mysql');
+const sequilize = require('./src/config/mysql');
 const logger = require('./src/utils/logger');
 const cors = require('cors');
 const helmet = require('helmet');
-const { AppError, ErrorHandler, asyncErrorHandler } = require('./src/utils/errorHandler');
 
 class Server {
   constructor() {
@@ -30,7 +29,6 @@ class Server {
       await this.connectDatabases();
       this.configureMiddlewares();
       this.configureRoutes();
-      this.configureErrorHandling();
       this.startServer();
     } catch (error) {
       this.handleInitializationError(error);
@@ -72,6 +70,8 @@ class Server {
       const { MONGODB_URI, MONGODB_DB_NAME } = process.env;
       logger.info('Connecting to MongoDB...');
       await mongoose.connect(MONGODB_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
         dbName: MONGODB_DB_NAME,
       });
       logger.info(`MongoDB connected to database: ${MONGODB_DB_NAME}`);
@@ -84,13 +84,23 @@ class Server {
   async connectMySQL() {
     try {
       logger.info('Connecting to MySQL...');
-      mysqlPool
-        .sync({ force: false })
+      sequilize
+        .authenticate()
         .then(() => {
-          logger.info('Table is Synced');
+          logger.info('Database Connected Successfully');
+          sequilize
+            .sync({ force: false, alter: true }) //its doing the table sync and
+            .then(() => {
+              logger.info('Database Synced Successfully');
+            })
+            .catch((syncErr) => {
+              logger.error('Error Syncing Database: ' + syncErr.message);
+              process.exit(1);
+            });
         })
-        .catch((error) => {
-          logger.info('Table is Not synced', error);
+        .catch((err) => {
+          logger.error('Error Connecting to Database', err);
+          process.exit(1);
         });
       logger.info('MySQL connection pool initialized');
     } catch (error) {
@@ -112,37 +122,24 @@ class Server {
   }
 
   configureRoutes() {
-    this.app.get(
-      '/',
-      asyncErrorHandler((req, res) => {
-        res.json({ status: 'Server is running', timestamp: new Date().toISOString() });
-        logger.info('Health check route accessed');
-      }),
-    );
+    this.app.use('/api', require('./src/routes/index'));
+    this.app.get('/', (req, res) => {
+      res.json({ status: 'Server is running', timestamp: new Date().toISOString() });
+      logger.info('Health check route accessed');
+    });
 
-    this.app.get(
-      '/mysql-test',
-      asyncErrorHandler(async (req, res) => {
-        try {
-          const [rows] = await mysqlPool.query('SELECT 1 + 1 AS solution');
-          res.json({ solution: rows[0].solution });
-          logger.info('MySQL test query executed successfully');
-        } catch (error) {
-          logger.error('MySQL query error', { error: error.message });
-          throw new AppError('MySQL query failed', 500);
-        }
-      }),
-    );
+    this.app.get('/mysql-test', async (req, res) => {
+      try {
+        const [rows] = await sequilize.query('SELECT 1 + 1 AS solution');
+        res.json({ solution: rows[0].solution });
+        logger.info('MySQL test query executed successfully');
+      } catch (error) {
+        logger.error('MySQL query error', { error: error.message });
+        res.status(500).json({ error: 'MySQL query failed' });
+      }
+    });
 
     logger.info('Routes configured');
-  }
-
-  configureErrorHandling() {
-    // Handle not found routes
-    this.app.use(ErrorHandler.notFoundHandler);
-
-    // Global error handling middleware
-    this.app.use(ErrorHandler.globalErrorMiddleware);
   }
 
   startServer() {
