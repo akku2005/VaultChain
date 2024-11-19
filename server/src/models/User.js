@@ -34,20 +34,19 @@ const User = sequelizeConfig.define(
         notEmpty: {
           msg: 'Email cannot be empty',
         },
-        async isUnique(value) {
-          const existingUser = await User.findOne({
-            where: {
-              email: value,
-              id: {
-                [Op.ne]: this.id, // Exclude current user when updating
-              },
-            },
-          });
-          if (existingUser) {
-            throw new Error('Email address is already in use');
-          }
-        },
       },
+    },
+    emailVerified: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    emailVerificationToken: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    emailVerificationTokenExpires: {
+      type: DataTypes.DATE,
+      allowNull: true,
     },
 
     phoneNumber: {
