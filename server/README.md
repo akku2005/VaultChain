@@ -28,3 +28,4 @@ A comprehensive backend solution for managing decentralized finance portfolios, 
 git clone
 cd defi-management-platform
 ```
+To contribute 
