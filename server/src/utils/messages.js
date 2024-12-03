@@ -17,11 +17,14 @@ module.exports = {
   CURRENT_PASSWORD_INCORRECT: 'Password is incorrect',
   LINK_INVALID: 'This link has been expired',
   RESET_PASS_LINK_SENT: 'The Reset password link has been sent to your register email or phone',
-  RESET_PASS_SUCCESS:
+  FORGOT_PASSWORD_SUCCESS:
+    'A password reset link has been sent to your email. Please check your inbox and follow the instructions to reset your password.',
+
+  RESET_PASSWORD_SUCCESS:
     'The Passoword has been reset successfully. Please login again with new password',
   UNVEIFIED_USER_OTP: 'You are not Registered User. SignUp on Platform',
   SERVER_ERROR_MESSAGE: 'There is Server error Please try after some time!',
-  LOGIN: 'Login Success',
+  LOGIN_SUCCESS: 'Login Success',
   // CONTACT_SUPPORT: `Please Contact Support with ${process.env.SUPPORTMAIL}`,
   ADD: 'Record Added Successfully',
   GET: 'Record for given condition is here',

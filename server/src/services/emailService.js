@@ -1,83 +1,3 @@
-// 'use strict';
-// const nodemailer = require('nodemailer');
-
-// // Function to get SMTP configuration based on environment
-// const getSmtpConfig = () => {
-//   const isProduction = process.env.NODE_ENV === 'production';
-
-//   return {
-//     host: isProduction ? process.env.PROD_SMTP_HOST : process.env.DEV_SMTP_HOST,
-//     port: isProduction ? parseInt(process.env.PROD_SMTP_PORT) : parseInt(process.env.DEV_SMTP_PORT),
-//     secure: isProduction
-//       ? process.env.PROD_SMTP_SECURE === 'true'
-//       : process.env.DEV_SMTP_SECURE === 'true',
-//     auth: {
-//       user: isProduction ? process.env.PROD_SMTP_USERNAME : process.env.DEV_SMTP_USERNAME,
-//       pass: isProduction ? process.env.PROD_SMTP_PASSWORD : process.env.DEV_SMTP_PASSWORD,
-//     },
-//   };
-// };
-
-// // Create a transporter using SMTP
-// const createTransporter = () => {
-//   const smtpConfig = getSmtpConfig();
-//   console.log('Using SMTP configuration:', smtpConfig); // Log the SMTP configuration
-//   return nodemailer.createTransport(smtpConfig);
-// };
-
-// // In emailService.js
-// const generateEmailTemplate = (verificationLink) => {
-//   return `
-//       <!DOCTYPE html>
-//       <html lang="en">
-//       <head>
-//         <meta charset="UTF-8">
-//         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-//         <title>Email Verification</title>
-//         <style>
-//           /* ... existing styles ... */
-//         </style>
-//       </head>
-//       <body>
-//         <div class="container">
-//           <h1>Welcome to Chit-Chat Hub</h1>
-//           <p>Please verify your email by clicking the link below:</p>
-//           <a href="${verificationLink}">Verify Email</a>
-//           <p>If the link doesn't work, copy and paste the following URL in your browser:</p>
-//           <p>${verificationLink}</p>
-//           <p>This link will expire in 24 hours.</p>
-//         </div>
-//       </body>
-//       </html>
-//     `;
-// };
-
-// const sendMail = async (email, verificationLink) => {
-//   try {
-//     // Create transporter dynamically based on environment
-//     const transporter = createTransporter();
-
-//     const isProduction = process.env.NODE_ENV === 'production';
-//     const fromEmail = isProduction ? process.env.PROD_SMTP_USERNAME : process.env.DEV_SMTP_USERNAME;
-
-//     await transporter.sendMail({
-//       from: `"Chit-Chat Hub" <${fromEmail}>`, // sender address
-//       to: email, // list of receivers
-//       subject: `Email Verification (${process.env.NODE_ENV || 'development'})`,
-//       html: generateEmailTemplate(verificationLink), // HTML body
-//     });
-
-//     console.log(
-//       `Verification link email sent successfully (${process.env.NODE_ENV || 'development'}).`,
-//     );
-//   } catch (error) {
-//     console.error('Error sending verification link email:', error);
-//     throw error;
-//   }
-// };
-
-// module.exports = sendMail;
-
 'use strict';
 const nodemailer = require('nodemailer');
 
@@ -248,6 +168,13 @@ const sendMail = async (email, verificationData, type = 'link') => {
   try {
     // Create transporter dynamically based on environment
     const transporter = createTransporter();
+    transporter.verify((error, success) => {
+      if (error) {
+        console.error('SMTP Connection Error:', error);
+      } else {
+        console.log('SMTP Connection Successful:', success);
+      }
+    });
 
     const isProduction = process.env.NODE_ENV === 'production';
     const fromEmail = isProduction ? process.env.PROD_SMTP_USERNAME : process.env.DEV_SMTP_USERNAME;

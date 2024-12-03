@@ -5,7 +5,9 @@ require('dotenv').config();
 const { ACCESS_TOKEN_MISSING, INVALID_ACCESS_TOKEN, SERVER_ERROR_MESSAGE } = require('./messages');
 const httpRes = require('./http');
 const JWT_SECRET = process.env.JWT_SECRET;
+const { randomBytes } = require('crypto'); // Import crypto for generating reset tokens
 
+// Function to generate JWT token
 let generateSign = (email, name, user_status, id, roll) => {
   let payload = {
     email: email,
@@ -20,6 +22,7 @@ let generateSign = (email, name, user_status, id, roll) => {
   return token;
 };
 
+// Function to verify JWT token
 let verifySign = (req, res, next) => {
   const bearerToken = req.get('Authorization') || req.headers['x-access-token'];
   if (!bearerToken)
@@ -43,7 +46,13 @@ let verifySign = (req, res, next) => {
   }
 };
 
+// Function to generate a reset token
+const generateResetToken = () => {
+  return randomBytes(32).toString('hex'); // 32 bytes = 64 character token
+};
+
 module.exports = {
   generateSign,
   verifySign,
+  generateResetToken, // Export the new generateResetToken function
 };

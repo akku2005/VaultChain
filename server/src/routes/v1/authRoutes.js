@@ -22,6 +22,7 @@ const {
   ResendVerification,
   ForgotPassword,
   ResetPassword,
+  VerifyEmail,
 } = require('../../controllers/authController');
 
 // Middleware Imports
@@ -38,7 +39,7 @@ router
   );
 
 // Login Route
-router.route('/login').post(prepareBody, loginValidator, asyncHandler('user', Login));
+router.route('/login').post(prepareBody, loginValidator, asyncHandler('Login', Login));
 
 // Profile Update Route (Protected)
 router
@@ -46,7 +47,10 @@ router
   .put(authenticate, prepareBody, updateProfileValidator, asyncHandler('user', UpdateProfile));
 
 // Email Verification Routes
-router.route('/verify-email').post(prepareBody, asyncHandler('user', ResendVerification));
+router.route('/verify-email').get(asyncHandler('user', VerifyEmail));
+
+// Resend Verification Link Route
+router.route('/resend-verification').post(prepareBody, asyncHandler('user', ResendVerification));
 
 // Password Management Routes
 router.route('/forgot-password').post(prepareBody, asyncHandler('user', ForgotPassword));
