@@ -6,6 +6,8 @@ const User = require('../models/User');
 const { randomBytes } = require('crypto');
 const moment = require('moment');
 const { Op } = require('sequelize');
+const { prepareResponse } = require('../utils/response');
+const httpRes = require('../utils/http');
 
 // Helper function to calculate age (prefixed with underscore to satisfy lint rule)
 const _calculateAge = (birthDate) => {
@@ -391,6 +393,83 @@ const resendVerificationEmail = async (req, res) => {
     });
   }
 };
+const forgotPassword = (req, res, _next) => {
+  const schema = Joi.object().keys({
+    email: Joi.string()
+      .trim()
+      .email({ minDomainSegments: 2, tlds: { allow: ['com', 'net', 'org', 'in'] } })
+      .required()
+      .messages({
+        'string.email': 'Invalid email format',
+        'string.empty': 'Email cannot be empty',
+        'any.required': 'Email is required',
+      }),
+  });
+
+  validatorHandler(req, res, _next, schema);
+};
+const resetPassword = (req, res, _next) => {
+  const schema = Joi.object({
+    token: Joi.string()
+      .trim()
+      .required()
+      .min(20) // Minimum token length
+      .max(255) // Maximum token length
+      .messages({
+        'string.empty': 'Reset token is required',
+        'any.required': 'Reset token is required',
+        'string.min': 'Invalid reset token',
+        'string.max': 'Reset token is too long',
+      }),
+
+    newPassword: Joi.string()
+      .trim()
+      .min(8)
+      .max(255)
+      .pattern(new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$'))
+      .required()
+      .messages({
+        'string.min': 'Password must be at least 8 characters long',
+        'string.max': 'Password must be less than 255 characters',
+        'string.pattern.base':
+          'Password must include uppercase, lowercase, number, and special character',
+        'string.empty': 'Password cannot be empty',
+        'any.required': 'Password is required',
+      }),
+
+    confirmPassword: Joi.string().trim().valid(Joi.ref('newPassword')).required().messages({
+      'any.only': 'Passwords must match',
+      'any.required': 'Confirm password is required',
+      'string.empty': 'Confirm password cannot be empty',
+    }),
+  }).with('newPassword', 'confirmPassword'); // Ensure both passwords are provided together
+
+  // Validate the request
+  const { error } = schema.validate(req.body, {
+    abortEarly: false, // Collect all validation errors
+    allowUnknown: false, // Prevent unknown fields
+  });
+
+  // Handle validation errors
+  if (error) {
+    // Map validation errors to a more detailed format
+    const validationErrors = error.details.map((detail) => ({
+      field: detail.path[0],
+      message: detail.message,
+    }));
+
+    // Send a structured error response
+    return res
+      .status(httpRes.BAD_REQUEST)
+      .json(prepareResponse('VALIDATION_ERROR', 'Validation failed', null, validationErrors));
+  }
+
+  // Remove confirmPassword from request body to prevent storing it
+  delete req.body.confirmPassword;
+
+  // Proceed to the next middleware
+  _next();
+};
 
 module.exports = {
   signup,
@@ -398,4 +477,6 @@ module.exports = {
   updateProfile,
   verifyEmail,
   resendVerificationEmail,
+  forgotPassword,
+  resetPassword,
 };

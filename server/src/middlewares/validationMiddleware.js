@@ -1,7 +1,7 @@
-// Request validation
 'use strict';
 const Joi = require('joi');
 
+// Request validation middleware
 const validatorHandler = (req, res, next, schema) => {
   const { error } = schema.validate(req.body);
 
@@ -13,13 +13,6 @@ const validatorHandler = (req, res, next, schema) => {
   }
   next();
 };
-
-// const attributeHandler = (req, res) => {
-//     return res.status(400).json({
-//         status: 'error',
-//         message: 'There is some connection issue with db instance'
-//     });
-// };
 
 // Verify Email Validation
 const verifyEmailValidator = (req, res, next) => {
@@ -53,7 +46,7 @@ const verifyEmailValidator = (req, res, next) => {
 const resendVerificationValidator = (req, res, next) => {
   const schema = Joi.object({
     email: Joi.string()
-      .email({ minDomainSegments: 2, tlds: { allow: ['com', 'net', 'org'] } })
+      .email({ minDomainSegments: 2, tlds: { allow: ['com', 'net', 'org', 'in'] } })
       .required()
       .messages({
         'string.email': 'Invalid email format',
@@ -77,4 +70,74 @@ const resendVerificationValidator = (req, res, next) => {
   next();
 };
 
-module.exports = { validatorHandler, verifyEmailValidator, resendVerificationValidator };
+// Forgot Password Validation
+const forgotPasswordValidator = (req, res, next) => {
+  const schema = Joi.object({
+    email: Joi.string()
+      .email({ minDomainSegments: 2, tlds: { allow: ['com', 'net', 'org', 'in'] } })
+      .required()
+      .messages({
+        'string.email': 'Invalid email format',
+        'any.required': 'Email is required',
+        'string.empty': 'Email cannot be empty',
+      }),
+  });
+
+  // Validate request body
+  const { error } = schema.validate(req.body);
+
+  // If validation fails, return error
+  if (error) {
+    return res.status(400).json({
+      status: 'error',
+      message: error.details[0].message,
+    });
+  }
+
+  // Proceed to next middleware
+  next();
+};
+
+// Reset Password Validation
+const resetPasswordValidator = (req, res, next) => {
+  const schema = Joi.object({
+    token: Joi.string().required().messages({
+      'any.required': 'Password reset token is required',
+      'string.empty': 'Password reset token cannot be empty',
+    }),
+    password: Joi.string()
+      .min(8)
+      .max(255)
+      .required()
+      .pattern(new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$'))
+      .messages({
+        'string.min': 'Password must be at least 8 characters long',
+        'string.pattern.base':
+          'Password must include uppercase, lowercase, number, and special character',
+        'string.empty': 'Password cannot be empty',
+        'any.required': 'Password is required',
+      }),
+  });
+
+  // Validate request body
+  const { error } = schema.validate(req.body);
+
+  // If validation fails, return error
+  if (error) {
+    return res.status(400).json({
+      status: 'error',
+      message: error.details[0].message,
+    });
+  }
+
+  // Proceed to next middleware
+  next();
+};
+
+module.exports = {
+  validatorHandler,
+  verifyEmailValidator,
+  resendVerificationValidator,
+  forgotPasswordValidator,
+  resetPasswordValidator,
+};

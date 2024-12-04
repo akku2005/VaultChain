@@ -1,6 +1,7 @@
 'use strict';
 const httpRes = require('../utils/http');
-const { v4: uuidv4 } = require('uuid');
+const logger = require('../utils/logger');
+const { Op } = require('sequelize');
 const {
   SERVER_ERROR_MESSAGE,
   VERIFY_EMAIL_BEFORE_LOGIN,
@@ -9,7 +10,7 @@ const {
   // RESET_PASSWORD_SUCCESS,
 } = require('../utils/messages');
 
-const { User } = require('../models/User');
+const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const { prepareResponse } = require('../utils/response');
 const { hashPassword } = require('../utils/Password');
@@ -18,7 +19,7 @@ const { getRawData } = require('../utils/function');
 const { randomBytes } = require('crypto');
 const moment = require('moment');
 const sendMail = require('../services/emailService'); // Assume you have this utility
-const { generateSign } = require('../utils/token'); // Import generateSign and verifySign functions
+const { generateSign } = require('../utils/token');
 
 exports.Signup = async (req, res) => {
   try {
@@ -177,99 +178,110 @@ exports.Login = async (req, res) => {
   }
 };
 
-exports.ForgotPassword = async (req, res, next) => {
+exports.ForgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
 
-    // Validate the email field
-    if (!email) {
-      return res.status(400).json({ message: 'Please provide an email address' });
+    // Find user by email
+    let userRecord = await User.findOne({ where: { email } });
+    if (!userRecord) {
+      return res
+        .status(httpRes.NOT_FOUND)
+        .json(prepareResponse('NOT_FOUND', 'User not found with this email', null, null));
     }
 
-    // Find the user by email using authService (assuming it's imported)
-    const user = await User.findOne({ where: { email } });
+    // Generate a password reset token (32 bytes in hex format)
+    const resetToken = crypto.randomBytes(32).toString('hex'); // Using crypto.randomBytes directly
 
-    if (!user) {
-      return res.status(404).json({ message: 'No user found with this email address' });
-    }
+    // Create hash of the reset token and save it to the user's record
+    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
 
-    // Generate a password reset token (random string)
-    let resetToken;
-    if (crypto && crypto.randomBytes) {
-      resetToken = crypto.randomBytes(20).toString('hex');
-    } else {
-      resetToken = uuidv4(); // Fallback to uuid if crypto is unavailable
-    }
+    // Set reset token and expiration time (1 hour from now)
+    userRecord.passwordResetToken = resetTokenHash;
+    userRecord.passwordResetTokenExpires = moment().add(1, 'hours').toDate();
 
-    // Set the expiration date (e.g., 1 hour)
-    const resetTokenExpires = new Date(Date.now() + 3600000); // 1 hour from now
+    await userRecord.save();
 
-    // Save the reset token and its expiration in the database
-    user.passwordResetToken = resetToken;
-    user.passwordResetTokenExpires = resetTokenExpires;
+    // Create reset password link with the token (expiration 1 hour)
+    const resetPasswordLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&userId=${userRecord.id}`;
 
-    await user.save();
+    // Send email with reset password link
+    await sendMail({
+      to: userRecord.email,
+      subject: 'Password Reset Request',
+      html: `
+        <h2>Password Reset</h2>
+        <p>Click the link below to reset your password:</p>
+        <a href="${resetPasswordLink}">Reset Password</a>
+        <p>This link will expire in 1 hour.</p>
+      `,
+    });
 
-    // Send a password reset email (make sure to replace with your own email service)
-    const resetUrl = `${req.protocol}://${req.get('host')}/reset-password/${resetToken}`;
-    const message = `You requested a password reset. Click the link below to reset your password: \n\n${resetUrl}`;
-
-    // Send the email
-    try {
-      await sendMail({
-        email: user.email,
-        subject: 'Password Reset Request',
-        message,
-      });
-
-      res.status(200).json({ message: 'Password reset link has been sent to your email.' });
-    } catch (emailError) {
-      // Rollback the reset token in case of email sending failure
-      user.passwordResetToken = null;
-      user.passwordResetTokenExpires = null;
-      await user.save();
-
-      console.error('Error sending email:', emailError);
-      return res.status(500).json({ message: 'Failed to send password reset email' });
-    }
-  } catch (err) {
-    console.error(err);
-    next(err); // Pass errors to the global error handler
+    // Respond to client
+    res
+      .status(httpRes.OK)
+      .json(prepareResponse('OK', 'Password reset link sent successfully', null, null));
+  } catch (error) {
+    console.error('Error while processing forgot password request:', error);
+    res
+      .status(httpRes.SERVER_ERROR)
+      .json(
+        prepareResponse(
+          'SERVER_ERROR',
+          'An error occurred while processing your request',
+          null,
+          error,
+        ),
+      );
   }
 };
-exports.ResetPassword = async (req, res) => {
+exports.resetPassword = async (req, res, next) => {
   try {
-    const { token, userId, newPassword } = req.body;
+    const { token } = req.params;
+    const { newPassword } = req.body;
 
-    // Find the user by ID
-    const user = await User.findByPk(userId);
+    // 1. Validate the new password
+    if (!newPassword) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide a new password.',
+      });
+    }
+
+    // 2. Hash the token and find the user
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await User.findOne({
+      where: {
+        passwordResetToken: hashedToken,
+        passwordResetTokenExpires: {
+          [Op.gt]: new Date(), // Token is still valid
+        },
+      },
+    });
 
     if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid or expired reset token.',
+      });
     }
 
-    // Check if the reset token is valid and has not expired
-    if (user.emailVerificationToken !== token) {
-      return res.status(400).json({ message: 'Invalid reset token' });
-    }
+    // 3. Hash the new password before saving it
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
 
-    if (user.emailVerificationTokenExpires < new Date()) {
-      return res.status(400).json({ message: 'Reset token has expired' });
-    }
-
-    // Hash the new password and update it
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    // 4. Update the user's password and clear the reset token and expiry
     user.password = hashedPassword;
-
-    // Clear the reset token and expiration
-    user.emailVerificationToken = null;
-    user.emailVerificationTokenExpires = null;
-
+    user.passwordResetToken = null;
+    user.passwordResetTokenExpires = null;
     await user.save();
 
-    res.status(200).json({ message: 'Password reset successfully' });
+    res.status(200).json({
+      status: 'success',
+      message: 'Your password has been reset successfully.',
+    });
   } catch (error) {
-    console.error('Error in reset password:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    logger.error('Reset Password Error:', error);
+    next(error); // Pass the error to the global error handler
   }
 };
