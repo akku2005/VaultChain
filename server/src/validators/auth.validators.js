@@ -298,7 +298,7 @@ const verifyEmail = async (req, res) => {
         emailVerificationTokenExpires: {
           [Op.gt]: new Date(), // Check if token is not expired
         },
-        emailVerified: false, // Ensure email is not already verified
+        isEmailVerified: false, // Ensure email is not already verified
       },
     });
 

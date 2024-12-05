@@ -1,7 +1,8 @@
 'use strict';
 const httpRes = require('../utils/http');
-const logger = require('../utils/logger');
+// const logger = require('../utils/logger');
 const { Op } = require('sequelize');
+const CryptoJS = require('crypto-js');
 const {
   SERVER_ERROR_MESSAGE,
   VERIFY_EMAIL_BEFORE_LOGIN,
@@ -182,47 +183,48 @@ exports.ForgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
 
+    // Validate email
+    if (!email) {
+      return res
+        .status(httpRes.BAD_REQUEST)
+        .json(prepareResponse('BAD_REQUEST', 'Email is required', null, null));
+    }
+
     // Find user by email
-    let userRecord = await User.findOne({ where: { email } });
+    const userRecord = await User.findOne({ where: { email } });
     if (!userRecord) {
       return res
         .status(httpRes.NOT_FOUND)
-        .json(prepareResponse('NOT_FOUND', 'User not found with this email', null, null));
+        .json(prepareResponse('NOT_FOUND', 'No user found with this email', null, null));
     }
 
-    // Generate a password reset token (32 bytes in hex format)
-    const resetToken = crypto.randomBytes(32).toString('hex'); // Using crypto.randomBytes directly
+    // Generate a random reset token
+    const resetToken = CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Hex);
 
-    // Create hash of the reset token and save it to the user's record
-    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+    // Hash the reset token
+    const resetTokenHash = CryptoJS.SHA256(resetToken).toString();
 
-    // Set reset token and expiration time (1 hour from now)
+    // Set reset token and expiration (1 hour from now)
     userRecord.passwordResetToken = resetTokenHash;
-    userRecord.passwordResetTokenExpires = moment().add(1, 'hours').toDate();
+    userRecord.passwordResetTokenExpires = moment().add(1, 'hour').toDate();
 
+    // Save updated user record
     await userRecord.save();
 
-    // Create reset password link with the token (expiration 1 hour)
+    // Generate the reset password link
     const resetPasswordLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&userId=${userRecord.id}`;
 
-    // Send email with reset password link
-    await sendMail({
-      to: userRecord.email,
-      subject: 'Password Reset Request',
-      html: `
-        <h2>Password Reset</h2>
-        <p>Click the link below to reset your password:</p>
-        <a href="${resetPasswordLink}">Reset Password</a>
-        <p>This link will expire in 1 hour.</p>
-      `,
-    });
+    // Send reset password email
+    const subject = 'Password Reset Request';
+    const emailType = 'reset'; // Adjust template type in your email service if needed
+    await sendMail(userRecord.email, resetPasswordLink, subject, emailType);
 
-    // Respond to client
+    // Respond to the client
     res
       .status(httpRes.OK)
       .json(prepareResponse('OK', 'Password reset link sent successfully', null, null));
   } catch (error) {
-    console.error('Error while processing forgot password request:', error);
+    console.error('Error during password reset:', error);
     res
       .status(httpRes.SERVER_ERROR)
       .json(
@@ -235,27 +237,29 @@ exports.ForgotPassword = async (req, res) => {
       );
   }
 };
+
 exports.resetPassword = async (req, res, next) => {
   try {
-    const { token } = req.params;
-    const { newPassword } = req.body;
+    // Extract token and new password
+    const { token, password } = req.body;
 
-    // 1. Validate the new password
-    if (!newPassword) {
+    // Validate if token and password are provided
+    if (!token || !password) {
       return res.status(400).json({
         status: 'error',
-        message: 'Please provide a new password.',
+        message: 'Token and new password are required.',
       });
     }
 
-    // 2. Hash the token and find the user
+    // Hash the token
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
 
+    // Find the user with the hashed token and ensure the token is still valid
     const user = await User.findOne({
       where: {
         passwordResetToken: hashedToken,
         passwordResetTokenExpires: {
-          [Op.gt]: new Date(), // Token is still valid
+          [Op.gt]: new Date(), // Ensure token expiration is in the future
         },
       },
     });
@@ -267,10 +271,10 @@ exports.resetPassword = async (req, res, next) => {
       });
     }
 
-    // 3. Hash the new password before saving it
-    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(password, 12);
 
-    // 4. Update the user's password and clear the reset token and expiry
+    // Update user with the new password and clear reset token fields
     user.password = hashedPassword;
     user.passwordResetToken = null;
     user.passwordResetTokenExpires = null;
@@ -278,10 +282,10 @@ exports.resetPassword = async (req, res, next) => {
 
     res.status(200).json({
       status: 'success',
-      message: 'Your password has been reset successfully.',
+      message: 'Password reset successful. You can now log in with your new password.',
     });
   } catch (error) {
-    logger.error('Reset Password Error:', error);
+    console.error('Error resetting password:', error);
     next(error); // Pass the error to the global error handler
   }
 };
