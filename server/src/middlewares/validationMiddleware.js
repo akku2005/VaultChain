@@ -97,68 +97,44 @@ const forgotPasswordValidator = (req, res, next) => {
   // Proceed to next middleware
   next();
 };
+
 // Reset Password Validation
 const resetPasswordValidator = (req, res, next) => {
   const schema = Joi.object({
-    token: Joi.string().required().min(10).max(255).messages({
+    token: Joi.string().required().messages({
       'any.required': 'Password reset token is required',
       'string.empty': 'Password reset token cannot be empty',
-      'string.min': 'Invalid token format',
-      'string.max': 'Token is too long',
     }),
-
     password: Joi.string()
-      .required()
       .min(8)
       .max(255)
+      .required()
       .pattern(new RegExp('^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@$!%*?&])[A-Za-z\\d@$!%*?&]{8,}$'))
       .messages({
         'string.min': 'Password must be at least 8 characters long',
-        'string.max': 'Password cannot exceed 255 characters',
         'string.pattern.base':
           'Password must include uppercase, lowercase, number, and special character',
         'string.empty': 'Password cannot be empty',
         'any.required': 'Password is required',
       }),
-
-    confirmPassword: Joi.string().valid(Joi.ref('password')).required().messages({
-      'any.only': 'Passwords must match',
-      'any.required': 'Confirm password is required',
-      'string.empty': 'Confirm password cannot be empty',
-    }),
   });
 
   // Validate request body
-  const { error } = schema.validate(req.body, { abortEarly: false });
+  const { error } = schema.validate(req.body);
 
-  // If validation fails, return comprehensive error
+  // If validation fails, return error
   if (error) {
-    const errors = error.details.map((err) => ({
-      field: err.path[0],
-      message: err.message,
-    }));
-
     return res.status(400).json({
       status: 'error',
-      message: 'Validation failed',
-      errors: errors,
+      message: error.details[0].message,
     });
   }
 
   // Proceed to next middleware
   next();
 };
-const errorHandler = (err, req, res, _next) => {
-  console.error(err);
 
-  res.status(err.status || 500).json({
-    status: 'error',
-    message: err.message || 'An unexpected error occurred',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
-  });
-};
 module.exports = {
-  errorHandler,
   validatorHandler,
   verifyEmailValidator,
   resendVerificationValidator,
