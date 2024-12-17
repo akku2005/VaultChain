@@ -1,49 +1,46 @@
 'use strict';
-
-const { Op } = require('sequelize');
-const bcrypt = require('bcryptjs');
-const moment = require('moment');
-const { randomBytes } = require('crypto');
-const CryptoJS = require('crypto-js');
-
 const httpRes = require('../utils/http');
+// const logger = require('../utils/logger');
+const { Op } = require('sequelize');
+const CryptoJS = require('crypto-js');
 const {
   SERVER_ERROR_MESSAGE,
   VERIFY_EMAIL_BEFORE_LOGIN,
   LOGIN_SUCCESS,
+  // FORGOT_PASSWORD_SUCCESS,
+  // RESET_PASSWORD_SUCCESS,
 } = require('../utils/messages');
+
+const User = require('../models/User');
+const bcrypt = require('bcryptjs');
 const { prepareResponse } = require('../utils/response');
 const { hashPassword } = require('../utils/Password');
+const user = require('../services/authService');
 const { getRawData } = require('../utils/function');
+const { randomBytes } = require('crypto');
+const moment = require('moment');
+const sendMail = require('../services/emailService'); // Assume you have this utility
 const { generateSign } = require('../utils/token');
-const sendMail = require('../services/emailService');
 const userService = require('../services/authService');
-const User = require('../models/User');
 
-/**
- * User Signup
- */
 exports.Signup = async (req, res) => {
   try {
     const body = req.body;
 
-    // Hash password
     body.password = await hashPassword(body.password);
 
-    // Generate email verification token
     const emailVerificationToken = randomBytes(32).toString('hex');
     body.emailVerificationToken = emailVerificationToken;
     body.emailVerificationTokenExpires = moment().add(24, 'hours').toDate();
-    body.emailVerified = false;
+    body.isEmailVerified = false;
 
-    // Add user to the database
-    let result = await userService.addData(body);
-    result = getRawData(result);
+    let user = await User.create(body);
+    user = user.get({ plain: true });
 
-    // Send email verification link
-    const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${emailVerificationToken}&userId=${result.id}`;
+    const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${emailVerificationToken}&userId=${user.id}`;
+
     await sendMail({
-      to: result.email,
+      to: user.email,
       subject: 'Verify Your Email',
       html: `
         <h2>Email Verification</h2>
@@ -55,7 +52,7 @@ exports.Signup = async (req, res) => {
 
     res
       .status(httpRes.CREATED)
-      .json(prepareResponse('CREATED', VERIFY_EMAIL_BEFORE_LOGIN, result, null));
+      .json(prepareResponse('CREATED', VERIFY_EMAIL_BEFORE_LOGIN, user, null));
   } catch (error) {
     console.error('Signup Error:', error);
     res
@@ -64,58 +61,59 @@ exports.Signup = async (req, res) => {
   }
 };
 
-/**
- * Verify Email
- */
 exports.VerifyEmail = async (req, res) => {
   try {
     const { token, userId } = req.query;
+    console.log('Verifying email for user:', userId);
 
-    const userData = await userService.findByVerificationToken(token, userId);
-    if (!userData) {
-      return res
-        .status(httpRes.BAD_REQUEST)
-        .json(prepareResponse('ERROR', 'Invalid or expired token', null, null));
-    }
-
-    await userService.verifyUserEmail(userId);
-
-    // Send verification success email
-    await sendMail({
-      to: userData.email,
-      subject: 'Email Verified Successfully',
-      html: `<p>Your email has been successfully verified!</p>`,
+    const userData = await User.findOne({
+      where: {
+        id: userId,
+        emailVerificationToken: token,
+        emailVerificationTokenExpires: {
+          [Op.gt]: new Date(),
+        },
+        isEmailVerified: false,
+      },
     });
 
-    res
-      .status(httpRes.OK)
-      .json(prepareResponse('SUCCESS', 'Email verified successfully', { userId }, null));
+    if (!userData) {
+      console.log('Token invalid or expired');
+      return res.status(400).json(prepareResponse(null, 'Invalid or expired token'));
+    }
+
+    await userData.update({
+      isEmailVerified: true,
+      emailVerificationToken: null,
+      emailVerificationTokenExpires: null,
+    });
+
+    // Send verification success email
+    await sendMail(userData.email, 'Your email has been successfully verified!', 'success');
+
+    res.status(200).json(prepareResponse({ userId }, 'Email verified successfully'));
   } catch (error) {
-    console.error('Verify Email Error:', error);
+    console.error('Error verifying email:', error);
     res
-      .status(httpRes.SERVER_ERROR)
-      .json(prepareResponse('SERVER_ERROR', SERVER_ERROR_MESSAGE, null, error));
+      .status(500)
+      .json(prepareResponse(null, 'There is Server error Please try after some time!'));
   }
 };
-
-/**
- * Resend Verification Email
- */
 exports.ResendVerification = async (req, res) => {
   try {
     const { email } = req.body;
+    console.log('Resending verification link to:', email);
 
     const userData = await userService.findUnverifiedUserByEmail(email);
+
     if (!userData) {
-      return res
-        .status(httpRes.NOT_FOUND)
-        .json(prepareResponse('ERROR', 'No unverified account found', null, null));
+      console.log('No unverified user found for email:', email);
+      return res.status(404).json(prepareResponse(null, 'No unverified account found'));
     }
 
-    if (userData.emailVerified) {
-      return res
-        .status(httpRes.BAD_REQUEST)
-        .json(prepareResponse('ERROR', 'Email already verified', null, null));
+    if (userData.isEmailVerified) {
+      console.log('User email is already verified:', email);
+      return res.status(400).json(prepareResponse(null, 'Email already verified'));
     }
 
     const newToken = randomBytes(32).toString('hex');
@@ -124,161 +122,243 @@ exports.ResendVerification = async (req, res) => {
     await userService.updateVerificationToken(userData.id, newToken, newTokenExpires);
 
     const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${newToken}&userId=${userData.id}`;
-    await sendMail({
-      to: userData.email,
-      subject: 'Resend Verification Email',
-      html: `
-        <h2>Email Verification</h2>
-        <p>Click the link below to verify your email:</p>
-        <a href="${verificationLink}">Verify Email</a>
-        <p>This link will expire in 24 hours.</p>
-      `,
-    });
+    console.log('Sending new verification link:', verificationLink);
 
-    res
-      .status(httpRes.OK)
-      .json(prepareResponse('SUCCESS', 'Verification email resent', null, null));
+    // Corrected call to sendMail
+    await sendMail(userData.email, verificationLink, 'link');
+
+    res.status(200).json(prepareResponse(null, 'Verification email resent'));
   } catch (error) {
-    console.error('Resend Verification Error:', error);
+    console.error('Error resending verification link:', error);
     res
-      .status(httpRes.SERVER_ERROR)
-      .json(prepareResponse('SERVER_ERROR', SERVER_ERROR_MESSAGE, null, error));
+      .status(500)
+      .json(prepareResponse(null, 'There is Server error Please try after some time!', error));
   }
 };
-
-/**
- * Login User
- */
 exports.Login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    const userData = await userService.findByEmail(email);
+    // Find user by email
+    const userData = await user.findByEmail(email);
     if (!userData) {
-      return res
-        .status(httpRes.NOT_FOUND)
-        .json(prepareResponse('ERROR', 'User not found', null, null));
+      return res.status(404).json(prepareResponse('ERROR', 'User not found', null, null));
     }
 
+    console.log('User data:', userData); // Debugging line to inspect user data
+
+    // Check if email is verified
     if (!userData.emailVerified) {
       return res
-        .status(httpRes.BAD_REQUEST)
+        .status(400)
         .json(prepareResponse('ERROR', 'Please verify your email before logging in', null, null));
     }
 
+    // Compare password
     const isPasswordValid = await bcrypt.compare(password, userData.password);
     if (!isPasswordValid) {
-      return res
-        .status(httpRes.UNAUTHORIZED)
-        .json(prepareResponse('ERROR', 'Invalid credentials', null, null));
+      return res.status(401).json(prepareResponse('ERROR', 'Invalid credentials', null, null));
     }
 
-    const token = generateSign(userData.email, userData.name, userData.role, userData.id);
-
-    res.status(httpRes.OK).json(
-      prepareResponse('SUCCESS', LOGIN_SUCCESS, {
-        token,
-        user: getRawData(userData),
-      }),
+    // Generate JWT token using the utility function from token.js
+    const token = generateSign(
+      userData.email,
+      `${userData.firstName} ${userData.lastName}`,
+      userData.role,
+      userData.id,
+      userData.role,
     );
+
+    // Send success response with token
+    const response = {
+      message: LOGIN_SUCCESS,
+      token,
+      user: getRawData(userData),
+    };
+
+    res.status(httpRes.OK).json(prepareResponse('SUCCESS', LOGIN_SUCCESS, response, null));
   } catch (error) {
-    console.error('Login Error:', error);
+    console.error('Error logging in:', error);
     res
       .status(httpRes.SERVER_ERROR)
       .json(prepareResponse('SERVER_ERROR', SERVER_ERROR_MESSAGE, null, error));
   }
 };
 
-/**
- * Forgot Password
- */
 exports.ForgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
 
+    // Validate email
     if (!email) {
       return res
         .status(httpRes.BAD_REQUEST)
-        .json(prepareResponse('ERROR', 'Email is required', null, null));
+        .json(prepareResponse('BAD_REQUEST', 'Email is required', null, null));
     }
 
+    // Find user by email
     const userRecord = await User.findOne({ where: { email } });
     if (!userRecord) {
       return res
         .status(httpRes.NOT_FOUND)
-        .json(prepareResponse('ERROR', 'No user found with this email', null, null));
+        .json(prepareResponse('NOT_FOUND', 'No user found with this email', null, null));
     }
 
-    const resetToken = randomBytes(32).toString('hex');
+    // Generate a random reset token
+    const resetToken = CryptoJS.lib.WordArray.random(32).toString(CryptoJS.enc.Hex);
+
+    // Hash the reset token
     const resetTokenHash = CryptoJS.SHA256(resetToken).toString();
 
+    // Set reset token and expiration (1 hour from now)
     userRecord.passwordResetToken = resetTokenHash;
     userRecord.passwordResetTokenExpires = moment().add(1, 'hour').toDate();
+
+    // Save updated user record
     await userRecord.save();
 
+    // Generate the reset password link
     const resetPasswordLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&userId=${userRecord.id}`;
-    await sendMail({
-      to: userRecord.email,
-      subject: 'Reset Your Password',
-      html: `
-        <h2>Reset Password</h2>
-        <p>Click the link below to reset your password:</p>
-        <a href="${resetPasswordLink}">Reset Password</a>
-        <p>This link will expire in 1 hour.</p>
-      `,
-    });
 
+    // Send reset password email using the new 'forgotPassword' type
+    await sendMail(userRecord.email, resetPasswordLink, 'forgotPassword');
+
+    // Respond to the client
     res
       .status(httpRes.OK)
-      .json(prepareResponse('SUCCESS', 'Password reset link sent successfully', null, null));
+      .json(prepareResponse('OK', 'Password reset link sent successfully', null, null));
   } catch (error) {
-    console.error('Forgot Password Error:', error);
+    console.error('Error during password reset:', error);
     res
       .status(httpRes.SERVER_ERROR)
-      .json(prepareResponse('SERVER_ERROR', SERVER_ERROR_MESSAGE, null, error));
+      .json(
+        prepareResponse(
+          'SERVER_ERROR',
+          'An error occurred while processing your request',
+          null,
+          error,
+        ),
+      );
   }
 };
-
-/**
- * Reset Password
- */
-exports.resetPassword = async (req, res) => {
+exports.ResetPassword = async (req, res) => {
   try {
-    const { token, password } = req.body;
+    const { userId, token, newPassword, confirmPassword } = req.body;
 
-    if (!token || !password) {
+    // Validate input
+    if (!userId || !token || !newPassword || !confirmPassword) {
       return res
         .status(httpRes.BAD_REQUEST)
-        .json(prepareResponse('BAD_REQUEST', 'Token and new password are required', null, null));
+        .json(prepareResponse('BAD_REQUEST', 'All fields are required', null, null));
     }
 
+    // Additional validation
+    if (newPassword !== confirmPassword) {
+      return res
+        .status(httpRes.BAD_REQUEST)
+        .json(prepareResponse('ERROR', 'Passwords do not match', null, null));
+    }
+
+    // Hash the token using CryptoJS
     const hashedToken = CryptoJS.SHA256(token).toString();
 
-    const userRecord = await User.findOne({
+    // Find the user with the hashed token and user ID
+    const userData = await User.findOne({
       where: {
+        id: userId,
         passwordResetToken: hashedToken,
-        passwordResetTokenExpires: { [Op.gt]: new Date() },
+        passwordResetTokenExpires: {
+          [Op.gt]: moment().toDate(), // Ensure token is not expired
+        },
       },
     });
 
-    if (!userRecord) {
+    // Check if user exists and token is valid
+    if (!userData) {
       return res
         .status(httpRes.BAD_REQUEST)
         .json(prepareResponse('ERROR', 'Invalid or expired reset token', null, null));
     }
 
-    const hashedPassword = await hashPassword(password);
+    // Verify that the user ID matches the token's owner
+    if (userData.id.toString() !== userId) {
+      return res
+        .status(httpRes.FORBIDDEN)
+        .json(prepareResponse('ERROR', 'Unauthorized password reset attempt', null, null));
+    }
 
-    userRecord.password = hashedPassword;
-    userRecord.passwordResetToken = null;
-    userRecord.passwordResetTokenExpires = null;
-    await userRecord.save();
+    // Validate password strength (optional, but recommended)
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    if (!passwordRegex.test(newPassword)) {
+      return res
+        .status(httpRes.BAD_REQUEST)
+        .json(
+          prepareResponse('ERROR', 'Password does not meet complexity requirements', null, null),
+        );
+    }
 
+    // Hash the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+    // Reset password and clear reset token
+    await User.update(
+      {
+        password: hashedPassword,
+        passwordResetToken: null,
+        passwordResetTokenExpires: null,
+      },
+      {
+        where: { id: userId },
+      },
+    );
+
+    // Send confirmation email
+    await sendMail(userData.email, userData, 'passwordResetSuccess');
+
+    // Respond with success
     res
       .status(httpRes.OK)
-      .json(prepareResponse('SUCCESS', 'Password reset successfully', null, null));
+      .json(
+        prepareResponse(
+          'SUCCESS',
+          'Password reset successful. You can now log in with your new password.',
+          null,
+          null,
+        ),
+      );
   } catch (error) {
-    console.error('Reset Password Error:', error);
+    console.error('Error resetting password:', error);
+    res
+      .status(httpRes.SERVER_ERROR)
+      .json(
+        prepareResponse('SERVER_ERROR', 'An error occurred while resetting password', null, error),
+      );
+  }
+};
+
+exports.Logout = async (req, res) => {
+  try {
+    const { userId } = req.body; // Assuming userId is sent in the request body
+
+    // Find the user by ID
+    const user = await User.findByPk(userId);
+
+    if (!user) {
+      return res
+        .status(httpRes.NOT_FOUND)
+        .json(prepareResponse('ERROR', 'User not found', null, null));
+    }
+
+    // Update the user's login status
+    await user.update({ isLoggedIn: false });
+
+    // Log the logout event
+    console.log(`User with ID ${userId} has logged out at ${new Date().toISOString()}`);
+
+    // Respond with success
+    res.status(httpRes.OK).json(prepareResponse('SUCCESS', 'Logout successful', null, null));
+  } catch (error) {
+    console.error('Error logging out:', error);
     res
       .status(httpRes.SERVER_ERROR)
       .json(prepareResponse('SERVER_ERROR', SERVER_ERROR_MESSAGE, null, error));
