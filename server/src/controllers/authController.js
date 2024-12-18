@@ -7,6 +7,7 @@ const {
   SERVER_ERROR_MESSAGE,
   VERIFY_EMAIL_BEFORE_LOGIN,
   LOGIN_SUCCESS,
+  LOGOUT_SUCCESS,
   // FORGOT_PASSWORD_SUCCESS,
   // RESET_PASSWORD_SUCCESS,
 } = require('../utils/messages');
@@ -362,5 +363,25 @@ exports.Logout = async (req, res) => {
     res
       .status(httpRes.SERVER_ERROR)
       .json(prepareResponse('SERVER_ERROR', SERVER_ERROR_MESSAGE, null, error));
+  }
+};
+
+exports.logout = async (req, res) => {
+  try {
+    // Assuming the token is sent in the Authorization header
+    const token = req.headers.authorization.split(' ')[1];
+
+    if (!token) {
+      return res.status(httpRes.BAD_REQUEST).json(prepareResponse(null, 'No token provided'));
+    }
+
+    // Optionally, you can add the token to a blacklist here
+    // For example, using a Redis store or a database to keep track of invalidated tokens
+
+    // Respond with a success message
+    res.status(httpRes.OK).json(prepareResponse(null, LOGOUT_SUCCESS));
+  } catch (error) {
+    console.error('Logout Error:', error);
+    res.status(httpRes.SERVER_ERROR).json(prepareResponse(null, SERVER_ERROR_MESSAGE, error));
   }
 };
